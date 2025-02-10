@@ -22,7 +22,7 @@ bought_contractor = {(Contractor, stream) : LpVariable(f"bought_{Contractor}_{st
 ## Constraint values.
 ## Here, we can adjust values for sensitivity testing
 # BUDGET:
-staff_budget = 10000000
+staff_budget = 11000000
 services_budget = 6000000
 # COSTS OF DECISIONS:
 training_cost = 1000
@@ -34,7 +34,18 @@ A6_sal  =  107713
 Man_sal =  134865
 Con_sal =  200000
 ExC_sal =  450000
+# EXISTING WORKFORCE
+existing_employees = {("A5", "Ana"): 20, ("A5", "Tech"): 7
+    , ("A6", "Ana"): 10, ("A6", "Tech"): 3
+    , ("Man", "Ana"): 6, ("Man", "Tech"): 5
+    , ("Con", "Ana") : 5, ("Con", "Tech") : 30
+    , ("ExC","Ana") : 0, ("ExC","Tech") : 2
+  }
+# TARGET WORKFORCE (by level)
+target_employees = {("1","Ana"): 40, ("2","Ana"): 15,("3","Ana"): 10,
+    ("1","Tech"): 50,("2","Tech"): 15,("3","Tech"): 8}
 
+## Define the dictionaries of costs: salary costs, hiring costs, training costs, promotion costs and contractors
 sal_costs_dict = {
     "A5": A5_sal
     , "A6": A6_sal
@@ -64,6 +75,7 @@ contractor_hired_dict = {
     , "ExC" : ExC_sal
 }
 
+## Define the objective function - minimising the spend
 model += lpSum(
     hiring_costs_dict[job] * hired[job,stream] + 
     training_costs_dict[job] * trained[job,from_stream,to_stream] +
@@ -74,7 +86,8 @@ model += lpSum(
 ), "Minimize_Cost"
 
 
-# Budget contraints
+## Define the constraints
+# CONSTRAINT: Cost of hiring, promoting, training permanent staff is lower than Permanent Staff Budget
 model += lpSum(
     hiring_costs_dict[job] * hired[job,stream] + 
     training_costs_dict[job] * trained[job,from_stream,to_stream] +
@@ -83,34 +96,21 @@ model += lpSum(
     if from_stream != to_stream and ((from_job == "A5" and to_job == "A6") or (from_job == "A6" and to_job == "Man"))
 ) <= staff_budget
 
+# CONSTRAINT: Cost of buying contractors is lower than Contractor Budget
 model += lpSum( 
     contractor_hired_dict[Contractor] * bought_contractor[Contractor,stream]
     for Contractor in contractor_vector for stream in streams_vector
 ) <= services_budget
 
-# Workforce target
-existing_employees = {("A5", "Ana"): 20, ("A5", "Tech"): 7
-    , ("A6", "Ana"): 10, ("A6", "Tech"): 3
-    , ("Man", "Ana"): 6, ("Man", "Tech"): 5
-    , ("Con", "Ana") : 5, ("Con", "Tech") : 30
-    , ("ExC","Ana") : 0, ("ExC","Tech") : 2
-  }  # Example data
-
-target_employees = {("1","Ana"): 40, ("2","Ana"): 15,("3","Ana"): 10,
-    ("1","Tech"): 50,("2","Tech"): 15,("3","Tech"): 8}  # Target workforce
-
+# CONSTRAINTS: Each level hits the target workforce
 model += existing_employees[("A5", "Ana")] + existing_employees[("Con", "Ana")] + hired[("A5","Ana")] + trained[("A5","Tech","Ana")] + bought_contractor["Con","Ana"] - trained[("A5","Ana","Tech")] - promoted[("A5","A6","Ana")] >= target_employees[("1","Ana")]
-
 model += existing_employees[("A6", "Ana")] + existing_employees[("ExC", "Ana")] + hired[("A6","Ana")] + trained[("A6","Tech","Ana")] + promoted[("A5","A6","Ana")] + bought_contractor["ExC","Ana"] - trained[("A6","Ana","Tech")] - promoted[("A6","Man","Ana")]>= target_employees[("2","Ana")]
-
 model += existing_employees[("Man", "Ana")] + hired[("Man","Ana")] + trained[("Man","Tech","Ana")] + promoted[("A6","Man","Ana")] + bought_contractor["ExC","Ana"] - trained[("Man","Ana","Tech")] >= target_employees[("3","Ana")]
-
 model += existing_employees[("A5", "Tech")] + existing_employees[("Con", "Tech")] + hired[("A5","Tech")] + trained[("A5","Ana","Tech")] + bought_contractor["Con","Tech"]  - trained[("A5","Tech","Ana")] - promoted[("A5","A6","Tech")]>= target_employees[("1","Tech")]
-
 model += existing_employees[("A6", "Tech")] + existing_employees[("ExC", "Tech")]  + hired[("A6","Tech")] + trained[("A6","Ana","Tech")] + promoted[("A5","A6","Tech")] - trained[("A6","Tech","Ana")] - promoted[("A6","Man","Tech")]>= target_employees[("2","Tech")]
-
 model += existing_employees[("Man", "Tech")] + hired[("Man","Tech")] + trained[("Man","Ana","Tech")] + promoted[("A6","Man","Tech")] - trained[("Man","Tech","Ana")] >= target_employees[("3","Tech")]
 
+# CONSTRAINTS: Cannot train more employees than there originally exists
 model += existing_employees[("A5", "Tech")] - trained[("A5","Tech","Ana")] >= 0
 model += existing_employees[("A5", "Ana")] - trained[("A5","Ana","Tech")]  >= 0
 model += existing_employees[("A6", "Tech")] - trained[("A6","Tech","Ana")] >= 0
@@ -118,9 +118,7 @@ model += existing_employees[("A6", "Ana")] - trained[("A6","Ana","Tech")]  >= 0
 model +=  existing_employees[("Man", "Tech")] - trained[("Man","Tech","Ana")]  >= 0
 model +=  existing_employees[("Man", "Ana")] - trained[("Man","Ana","Tech")]  >= 0
 
-#model += lpSum(promoted["A5","A6",stream] for stream in streams_vector) <= promotion_limit
-#model += lpSum(promoted["A6","Man",stream] for stream in streams_vector) <= promotion_limit
-
+## Solve the model and print outputs
 model.solve(PULP_CBC_CMD(timeLimit=60))
 
 print("Optimal Hiring, Training, and Promotion Plan:")
