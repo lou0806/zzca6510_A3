@@ -1,4 +1,4 @@
-from pulp import LpMinimize, LpProblem, LpVariable, lpSum, PULP_CBC_CMD
+from pulp import LpMinimize, LpProblem, LpVariable, lpSum, PULP_CBC_CMD, value
 
 ## Employee and role data
 jobs = ["A5","A6","Man"] # Permanent staff types: APS5, APS6, Managers
@@ -11,23 +11,24 @@ model = LpProblem("Employee_Structure_Optimisation", LpMinimize)
 
 ## Decision variables - create dictionaries
 # DECISION (HIRING) - an employee goes into a job and a stream
-hired = {(job,stream): LpVariable(f"hired_{job}_{stream}",0,None,cat="Integer") for job in jobs for stream in streams_vector}
+hired = {(job,stream): LpVariable(f"hired_{job}_{stream}",lowBound=0,cat="Integer") for job in jobs for stream in streams_vector}
 # DECISION (CROSS-TRAINING) - an employee at a certain job goes from one stream to another stream
-trained = {(job,from_stream,to_stream): LpVariable(f"trained_{job}_{from_stream}_{to_stream}",0,None,cat="Integer") for job in jobs for from_stream in streams_vector for to_stream in streams_vector if from_stream != to_stream}
+trained = {(job,from_stream,to_stream): LpVariable(f"trained_{job}_{from_stream}_{to_stream}",lowBound=0,cat="Integer") for job in jobs for from_stream in streams_vector for to_stream in streams_vector if from_stream != to_stream}
 # DECISION (PROMOTION) - an employee goes from one job to another job, within a defined stream
-promoted = {(from_job,to_job,stream): LpVariable(f"promoted_{from_job}_{to_job}_{stream}",0,None,cat="Integer") for from_job in jobs for to_job in jobs for stream in streams_vector if (from_job == "A5" and to_job == "A6") or (from_job == "A6" and to_job == "Man") }
+# Note: here, we have to create a dummy variable {"A5","A5",stream} to make the rest of the code work
+promoted = {(from_job,to_job,stream): LpVariable(f"promoted_{from_job}_{to_job}_{stream}",lowBound=0,cat="Integer") for from_job in jobs for to_job in jobs for stream in streams_vector if (from_job == "A5" and to_job == "A5") or (from_job == "A5" and to_job == "A6") or (from_job == "A6" and to_job == "Man") }
 # DECISION (BUY CONTRACTOR) - a contractor type goes into a stream
-bought_contractor = {(Contractor, stream) : LpVariable(f"bought_{Contractor}_{stream}",0,None,cat="Integer") for Contractor in contractor_vector for stream in streams_vector}
+bought_contractor = {(Contractor, stream) : LpVariable(f"bought_{Contractor}_{stream}",lowBound=0,cat="Integer") for Contractor in contractor_vector for stream in streams_vector}
 
 ## Constraint values.
 ## Here, we can adjust values for sensitivity testing
 # BUDGET:
-staff_budget = 11000000
-services_budget = 6000000
+staff_budget = 4500000
+services_budget = 2000000
 # COSTS OF DECISIONS:
-training_cost = 1000
-promo_cost = 200
-hiring_cost = 5000
+training_cost = 4800
+promo_cost = 10000
+hiring_cost = 10000
 # SALARIES (based on top of 2024 Department of Home Affairs Bands)
 A5_sal  =  91809
 A6_sal  =  107713
@@ -54,20 +55,20 @@ sal_costs_dict = {
 
 hiring_costs_dict = {
     "A5": A5_sal + hiring_cost
-    , "A6": A6_sal+hiring_cost
-    , "Man": Man_sal+hiring_cost
+    , "A6": A6_sal + hiring_cost
+    , "Man": Man_sal + hiring_cost
 }
 
 training_costs_dict = {
-    "A5": A5_sal + training_cost
-    , "A6": A6_sal+training_cost
-    , "Man": Man_sal+training_cost
+    "A5": A5_sal + training_cost - A5_sal
+    , "A6": A6_sal + training_cost - A6_sal
+    , "Man": Man_sal + training_cost - Man_sal
 }
 
 promotion_costs_dict = {
-    "A5": A5_sal + promo_cost
-    , "A6": A6_sal + promo_cost
-    , "Man": Man_sal + promo_cost
+    "A5": A5_sal + promo_cost - A5_sal
+    , "A6": A6_sal + promo_cost - A5_sal
+    , "Man": Man_sal + promo_cost - Man_sal
 }
 
 contractor_hired_dict = {
@@ -76,50 +77,60 @@ contractor_hired_dict = {
 }
 
 ## Define the objective function - minimising the spend
-model += lpSum(
-    hiring_costs_dict[job] * hired[job,stream] + 
-    training_costs_dict[job] * trained[job,from_stream,to_stream] +
-    promotion_costs_dict[job] * promoted[from_job,to_job,stream] + 
-    contractor_hired_dict[Contractor] * bought_contractor[Contractor,stream]
-    for job in jobs for from_job in jobs for to_job in jobs for stream in streams_vector for from_stream in streams_vector for to_stream in streams_vector for Contractor in contractor_vector
-    if from_stream != to_stream and ((from_job == "A5" and to_job == "A6") or (from_job == "A6" and to_job == "Man"))
-), "Minimize_Cost"
+model += (lpSum(
+        hiring_costs_dict[job] * hired[job,stream] + 
+        training_costs_dict[job] * trained[job,from_stream,to_stream] +
+        promotion_costs_dict[job] * promoted[from_job,to_job,stream]
+        for job in jobs for from_job in jobs for to_job in jobs for stream in streams_vector for from_stream in streams_vector for to_stream in streams_vector
+        if (from_stream != to_stream and ((from_job == "A5" and to_job == "A5") or (from_job == "A5" and to_job == "A6") or (from_job == "A6" and to_job == "Man")) and job == to_job and to_stream == stream)
+    )
+    + lpSum(
+        contractor_hired_dict[Contractor] * bought_contractor[Contractor,stream]
+        for Contractor in contractor_vector for stream in streams_vector
+    ), "Minimize_Cost")
 
+#print(promoted)
 
 ## Define the constraints
 # CONSTRAINT: Cost of hiring, promoting, training permanent staff is lower than Permanent Staff Budget
-model += lpSum(
+model += (lpSum(
     hiring_costs_dict[job] * hired[job,stream] + 
     training_costs_dict[job] * trained[job,from_stream,to_stream] +
     promotion_costs_dict[job] * promoted[from_job,to_job,stream]
     for job in jobs for from_job in jobs for to_job in jobs for stream in streams_vector for from_stream in streams_vector for to_stream in streams_vector
-    if from_stream != to_stream and ((from_job == "A5" and to_job == "A6") or (from_job == "A6" and to_job == "Man"))
-) <= staff_budget
+    if (from_stream != to_stream and ((from_job == "A5" and to_job == "A5") or (from_job == "A5" and to_job == "A6") or (from_job == "A6" and to_job == "Man")) and job == to_job and to_stream == stream)
+) <= staff_budget, "Staff budget constraint")
 
 # CONSTRAINT: Cost of buying contractors is lower than Contractor Budget
-model += lpSum( 
+model += (lpSum(
     contractor_hired_dict[Contractor] * bought_contractor[Contractor,stream]
     for Contractor in contractor_vector for stream in streams_vector
-) <= services_budget
+) <= services_budget, "Contractor budget constraint")
 
 # CONSTRAINTS: Each level hits the target workforce
-model += existing_employees[("A5", "Ana")] + existing_employees[("Con", "Ana")] + hired[("A5","Ana")] + trained[("A5","Tech","Ana")] + bought_contractor["Con","Ana"] - trained[("A5","Ana","Tech")] - promoted[("A5","A6","Ana")] >= target_employees[("1","Ana")]
-model += existing_employees[("A6", "Ana")] + existing_employees[("ExC", "Ana")] + hired[("A6","Ana")] + trained[("A6","Tech","Ana")] + promoted[("A5","A6","Ana")] + bought_contractor["ExC","Ana"] - trained[("A6","Ana","Tech")] - promoted[("A6","Man","Ana")]>= target_employees[("2","Ana")]
-model += existing_employees[("Man", "Ana")] + hired[("Man","Ana")] + trained[("Man","Tech","Ana")] + promoted[("A6","Man","Ana")] + bought_contractor["ExC","Ana"] - trained[("Man","Ana","Tech")] >= target_employees[("3","Ana")]
-model += existing_employees[("A5", "Tech")] + existing_employees[("Con", "Tech")] + hired[("A5","Tech")] + trained[("A5","Ana","Tech")] + bought_contractor["Con","Tech"]  - trained[("A5","Tech","Ana")] - promoted[("A5","A6","Tech")]>= target_employees[("1","Tech")]
-model += existing_employees[("A6", "Tech")] + existing_employees[("ExC", "Tech")]  + hired[("A6","Tech")] + trained[("A6","Ana","Tech")] + promoted[("A5","A6","Tech")] - trained[("A6","Tech","Ana")] - promoted[("A6","Man","Tech")]>= target_employees[("2","Tech")]
-model += existing_employees[("Man", "Tech")] + hired[("Man","Tech")] + trained[("Man","Ana","Tech")] + promoted[("A6","Man","Tech")] - trained[("Man","Tech","Ana")] >= target_employees[("3","Tech")]
+model += (existing_employees[("A5", "Ana")] + existing_employees[("Con", "Ana")] + hired[("A5","Ana")] + trained[("A5","Tech","Ana")] + bought_contractor["Con","Ana"] - trained[("A5","Ana","Tech")] - promoted[("A5","A6","Ana")] >= target_employees[("1","Ana")],"Target Level 1 Analysts")
+model += (existing_employees[("A6", "Ana")] + existing_employees[("ExC", "Ana")] + hired[("A6","Ana")] + trained[("A6","Tech","Ana")] + promoted[("A5","A6","Ana")] + bought_contractor["ExC","Ana"] - trained[("A6","Ana","Tech")] - promoted[("A6","Man","Ana")]>= target_employees[("2","Ana")],"Target Level 2 Analysts")
+model += (existing_employees[("Man", "Ana")] + hired[("Man","Ana")] + trained[("Man","Tech","Ana")] + promoted[("A6","Man","Ana")] - trained[("Man","Ana","Tech")] >= target_employees[("3","Ana")], "Target Level 3 Analysts")
+model += (existing_employees[("A5", "Tech")] + existing_employees[("Con", "Tech")] + hired[("A5","Tech")] + trained[("A5","Ana","Tech")] + bought_contractor["Con","Tech"]  - trained[("A5","Tech","Ana")] - promoted[("A5","A6","Tech")] >= target_employees[("1","Tech")], "Target Level 1 Tech")
+model += (existing_employees[("A6", "Tech")] + existing_employees[("ExC", "Tech")]  + hired[("A6","Tech")] + trained[("A6","Ana","Tech")] + promoted[("A5","A6","Tech")] + bought_contractor["ExC","Tech"] - trained[("A6","Tech","Ana")] - promoted[("A6","Man","Tech")]>= target_employees[("2","Tech")], "Target Level 2 Tech")
+model += (existing_employees[("Man", "Tech")] + hired[("Man","Tech")] + trained[("Man","Ana","Tech")] + promoted[("A6","Man","Tech")] - trained[("Man","Tech","Ana")] >= target_employees[("3","Tech")], "Target Level 3 Tech")
 
-# CONSTRAINTS: Cannot train more employees than there originally exists
-model += existing_employees[("A5", "Tech")] - trained[("A5","Tech","Ana")] >= 0
-model += existing_employees[("A5", "Ana")] - trained[("A5","Ana","Tech")]  >= 0
-model += existing_employees[("A6", "Tech")] - trained[("A6","Tech","Ana")] >= 0
-model += existing_employees[("A6", "Ana")] - trained[("A6","Ana","Tech")]  >= 0
-model +=  existing_employees[("Man", "Tech")] - trained[("Man","Tech","Ana")]  >= 0
-model +=  existing_employees[("Man", "Ana")] - trained[("Man","Ana","Tech")]  >= 0
+model += (promoted[("A5","A5","Ana")] == 0)
+model += (promoted[("A5","A5","Tech")] == 0)
+# CONSTRAINTS: Cannot train and promote more employees than there originally exists
+model += existing_employees[("A5", "Tech")] - trained[("A5","Tech","Ana")]    -promoted[("A5","A6","Tech")]      >= 0
+model += existing_employees[("A5", "Ana")] - trained[("A5","Ana","Tech")]     -promoted[("A5","A6","Ana")]      >= 0
+model += existing_employees[("A6", "Tech")] - trained[("A6","Tech","Ana")]    -promoted[("A6","Man","Ana")]      >= 0
+model += existing_employees[("A6", "Ana")] - trained[("A6","Ana","Tech")]     -promoted[("A6","Man","Tech")]      >= 0
+model +=  existing_employees[("Man", "Tech")] - trained[("Man","Tech","Ana")]       >= 0
+model +=  existing_employees[("Man", "Ana")] - trained[("Man","Ana","Tech")]       >= 0
+
+
+for name, constraint in model.constraints.items():
+    print(f"{name}: {constraint}")
 
 ## Solve the model and print outputs
-model.solve(PULP_CBC_CMD(timeLimit=60))
+model.solve(PULP_CBC_CMD(timeLimit=120))
 
 print("Optimal Hiring, Training, and Promotion Plan:")
 for job in jobs:
@@ -139,4 +150,36 @@ for from_job in jobs:
                 print(f"{from_job} {to_job} {stream}: Promoted = {promoted[from_job, to_job, stream].varValue}")
 
 for contractor in contractor_vector:
-    print(f"{contractor} {stream} : Bought contractor = {bought_contractor[contractor, stream].varValue}")
+    for stream in streams_vector:
+        print(f"{contractor} {stream} : Bought contractor = {bought_contractor[contractor, stream].varValue}")
+
+cost = value(model.objective)  
+print(f"Cost to budget: {cost} out of {staff_budget+services_budget}")
+print(f"This saves: {staff_budget+services_budget-cost}")
+
+
+staff_budget_spend = value(
+    lpSum(
+        hiring_costs_dict[job] * hired[job,stream] + 
+        training_costs_dict[job] * trained[job,from_stream,to_stream] +
+        promotion_costs_dict[job] * promoted[from_job,to_job,stream]
+        for job in jobs for from_job in jobs for to_job in jobs for stream in streams_vector for from_stream in streams_vector for to_stream in streams_vector
+        if (from_stream != to_stream and ((from_job == "A5" and to_job == "A5") or (from_job == "A5" and to_job == "A6") or (from_job == "A6" and to_job == "Man")) and job == to_job and to_stream == stream)
+    )
+)
+
+services_budget_spend = value(
+    lpSum(
+        contractor_hired_dict[Contractor] * bought_contractor[Contractor,stream]
+        for Contractor in contractor_vector for stream in streams_vector
+    )
+)
+
+
+print(f"Staff budget spend: {staff_budget_spend}")
+print(f"Remaining Staff budget: {staff_budget - staff_budget_spend}")
+print(f"Services budget spend: {services_budget_spend}")
+print(f"Remaining Services budget: {services_budget - services_budget_spend}")
+
+
+print(model.objective)
