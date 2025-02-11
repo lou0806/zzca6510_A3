@@ -1,3 +1,9 @@
+
+### Louis Zhi Hong Ye z5120556
+## ZZCA6510
+## Accompanying the report 
+## A3: Prescriptive Analytics: Supporting workforce expansion with linear programming and integer ## programming – Navigating complex budgets
+
 from pulp import LpMinimize, LpProblem, LpVariable, lpSum, PULP_CBC_CMD, value
 
 ## Employee and role data
