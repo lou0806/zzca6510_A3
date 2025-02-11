@@ -23,12 +23,12 @@ bought_contractor = {(Contractor, stream) : LpVariable(f"bought_{Contractor}_{st
 ## Constraint values.
 ## Here, we can adjust values for sensitivity testing
 # BUDGET:
-staff_budget = 4500000
-services_budget = 2000000
+staff_budget = 6000000
+services_budget = 4000000
 # COSTS OF DECISIONS:
-training_cost = 4800
-promo_cost = 10000
-hiring_cost = 10000
+training_cost = 1
+promo_cost = 2
+hiring_cost = 20000
 # SALARIES (based on top of 2024 Department of Home Affairs Bands)
 A5_sal  =  91809
 A6_sal  =  107713
@@ -43,8 +43,8 @@ existing_employees = {("A5", "Ana"): 20, ("A5", "Tech"): 7
     , ("ExC","Ana") : 0, ("ExC","Tech") : 2
   }
 # TARGET WORKFORCE (by level)
-target_employees = {("1","Ana"): 40, ("2","Ana"): 15,("3","Ana"): 10,
-    ("1","Tech"): 50,("2","Tech"): 15,("3","Tech"): 8}
+target_employees = {("1","Ana"): 40, ("2","Ana"): 20,("3","Ana"): 10,
+    ("1","Tech"): 50,("2","Tech"): 20,("3","Tech"): 10}
 
 ## Define the dictionaries of costs: salary costs, hiring costs, training costs, promotion costs and contractors
 sal_costs_dict = {
@@ -68,7 +68,7 @@ training_costs_dict = {
 promotion_costs_dict = {
     "A5": A5_sal + promo_cost - A5_sal
     , "A6": A6_sal + promo_cost - A5_sal
-    , "Man": Man_sal + promo_cost - Man_sal
+    , "Man": Man_sal + promo_cost - A6_sal
 }
 
 contractor_hired_dict = {
@@ -114,23 +114,24 @@ model += (existing_employees[("Man", "Ana")] + hired[("Man","Ana")] + trained[("
 model += (existing_employees[("A5", "Tech")] + existing_employees[("Con", "Tech")] + hired[("A5","Tech")] + trained[("A5","Ana","Tech")] + bought_contractor["Con","Tech"]  - trained[("A5","Tech","Ana")] - promoted[("A5","A6","Tech")] >= target_employees[("1","Tech")], "Target Level 1 Tech")
 model += (existing_employees[("A6", "Tech")] + existing_employees[("ExC", "Tech")]  + hired[("A6","Tech")] + trained[("A6","Ana","Tech")] + promoted[("A5","A6","Tech")] + bought_contractor["ExC","Tech"] - trained[("A6","Tech","Ana")] - promoted[("A6","Man","Tech")]>= target_employees[("2","Tech")], "Target Level 2 Tech")
 model += (existing_employees[("Man", "Tech")] + hired[("Man","Tech")] + trained[("Man","Ana","Tech")] + promoted[("A6","Man","Tech")] - trained[("Man","Tech","Ana")] >= target_employees[("3","Tech")], "Target Level 3 Tech")
-
+# CONSTRAINT: Force the number of 'promotions' of A5 to A5 to be 0 - this is to ensure the dictionaries function properly
 model += (promoted[("A5","A5","Ana")] == 0)
 model += (promoted[("A5","A5","Tech")] == 0)
 # CONSTRAINTS: Cannot train and promote more employees than there originally exists
-model += existing_employees[("A5", "Tech")] - trained[("A5","Tech","Ana")]    -promoted[("A5","A6","Tech")]      >= 0
-model += existing_employees[("A5", "Ana")] - trained[("A5","Ana","Tech")]     -promoted[("A5","A6","Ana")]      >= 0
-model += existing_employees[("A6", "Tech")] - trained[("A6","Tech","Ana")]    -promoted[("A6","Man","Ana")]      >= 0
-model += existing_employees[("A6", "Ana")] - trained[("A6","Ana","Tech")]     -promoted[("A6","Man","Tech")]      >= 0
-model +=  existing_employees[("Man", "Tech")] - trained[("Man","Tech","Ana")]       >= 0
-model +=  existing_employees[("Man", "Ana")] - trained[("Man","Ana","Tech")]       >= 0
+model += trained[("A5","Tech","Ana")] + promoted[("A5","A6","Tech")] <= existing_employees[("A5", "Tech")]
+model += trained[("A5","Ana","Tech")] + promoted[("A5","A6","Ana")] <= existing_employees[("A5", "Ana")]
+model += trained[("A6","Tech","Ana")] + promoted[("A6","Man","Ana")] <= existing_employees[("A6", "Tech")]
+model += trained[("A6","Ana","Tech")] + promoted[("A6","Man","Tech")] <= existing_employees[("A6", "Ana")]
+model +=  trained[("Man","Tech","Ana")] <= existing_employees[("Man", "Tech")] 
+model +=  trained[("Man","Ana","Tech")] <= existing_employees[("Man", "Ana")]
 
-
-for name, constraint in model.constraints.items():
-    print(f"{name}: {constraint}")
 
 ## Solve the model and print outputs
 model.solve(PULP_CBC_CMD(timeLimit=120))
+
+# Print model constraints
+for name, constraint in model.constraints.items():
+    print(f"{name}: {constraint}")
 
 print("Optimal Hiring, Training, and Promotion Plan:")
 for job in jobs:
@@ -155,7 +156,7 @@ for contractor in contractor_vector:
 
 cost = value(model.objective)  
 print(f"Cost to budget: {cost} out of {staff_budget+services_budget}")
-print(f"This saves: {staff_budget+services_budget-cost}")
+print(f"We have remaining: {staff_budget+services_budget-cost}")
 
 
 staff_budget_spend = value(
@@ -175,11 +176,10 @@ services_budget_spend = value(
     )
 )
 
-
 print(f"Staff budget spend: {staff_budget_spend}")
 print(f"Remaining Staff budget: {staff_budget - staff_budget_spend}")
 print(f"Services budget spend: {services_budget_spend}")
 print(f"Remaining Services budget: {services_budget - services_budget_spend}")
 
 
-print(model.objective)
+#print(model.objective)
