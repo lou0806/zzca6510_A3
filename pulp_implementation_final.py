@@ -23,8 +23,8 @@ bought_contractor = {(Contractor, stream) : LpVariable(f"bought_{Contractor}_{st
 ## Constraint values.
 ## Here, we can adjust values for sensitivity testing
 # BUDGET:
-staff_budget = 0
-services_budget = 10000000
+staff_budget = 6000000
+services_budget = 4000000
 # COSTS OF DECISIONS:
 training_cost = 2000
 promo_cost = 1000
