@@ -108,22 +108,22 @@ model += (lpSum(
 ) <= services_budget, "Contractor budget constraint")
 
 # CONSTRAINTS: Each level hits the target workforce
-model += (existing_employees[("A5", "Ana")] + existing_employees[("Con", "Ana")] + hired[("A5","Ana")] + trained[("A5","Tech","Ana")] + bought_contractor["Con","Ana"] - trained[("A5","Ana","Tech")] - promoted[("A5","A6","Ana")] >= target_employees[("1","Ana")],"Target Level 1 Analysts")
-model += (existing_employees[("A6", "Ana")] + existing_employees[("ExC", "Ana")] + hired[("A6","Ana")] + trained[("A6","Tech","Ana")] + promoted[("A5","A6","Ana")] + bought_contractor["ExC","Ana"] - trained[("A6","Ana","Tech")] - promoted[("A6","Man","Ana")]>= target_employees[("2","Ana")],"Target Level 2 Analysts")
-model += (existing_employees[("Man", "Ana")] + hired[("Man","Ana")] + trained[("Man","Tech","Ana")] + promoted[("A6","Man","Ana")] - trained[("Man","Ana","Tech")] >= target_employees[("3","Ana")], "Target Level 3 Analysts")
-model += (existing_employees[("A5", "Tech")] + existing_employees[("Con", "Tech")] + hired[("A5","Tech")] + trained[("A5","Ana","Tech")] + bought_contractor["Con","Tech"]  - trained[("A5","Tech","Ana")] - promoted[("A5","A6","Tech")] >= target_employees[("1","Tech")], "Target Level 1 Tech")
-model += (existing_employees[("A6", "Tech")] + existing_employees[("ExC", "Tech")]  + hired[("A6","Tech")] + trained[("A6","Ana","Tech")] + promoted[("A5","A6","Tech")] + bought_contractor["ExC","Tech"] - trained[("A6","Tech","Ana")] - promoted[("A6","Man","Tech")]>= target_employees[("2","Tech")], "Target Level 2 Tech")
-model += (existing_employees[("Man", "Tech")] + hired[("Man","Tech")] + trained[("Man","Ana","Tech")] + promoted[("A6","Man","Tech")] - trained[("Man","Tech","Ana")] >= target_employees[("3","Tech")], "Target Level 3 Tech")
+model += (lpSum(existing_employees[("A5", "Ana")] + existing_employees[("Con", "Ana")] + hired[("A5","Ana")] + trained[("A5","Tech","Ana")] + bought_contractor["Con","Ana"] - trained[("A5","Ana","Tech")] - promoted[("A5","A6","Ana")]                                   ) >= target_employees[("1","Ana")],"Target Level 1 Analysts")
+model += (lpSum(existing_employees[("A6", "Ana")] + existing_employees[("ExC", "Ana")] + hired[("A6","Ana")] + trained[("A6","Tech","Ana")] + promoted[("A5","A6","Ana")] + bought_contractor["ExC","Ana"] - trained[("A6","Ana","Tech")] - promoted[("A6","Man","Ana")]    ) >= target_employees[("2","Ana")],"Target Level 2 Analysts")
+model += (lpSum(existing_employees[("Man", "Ana")] + hired[("Man","Ana")] + trained[("Man","Tech","Ana")] + promoted[("A6","Man","Ana")] - trained[("Man","Ana","Tech")]                                                                                                    ) >= target_employees[("3","Ana")], "Target Level 3 Analysts")
+model += (lpSum(existing_employees[("A5", "Tech")] + existing_employees[("Con", "Tech")] + hired[("A5","Tech")] + trained[("A5","Ana","Tech")] + bought_contractor["Con","Tech"]  - trained[("A5","Tech","Ana")] - promoted[("A5","A6","Tech")]                             ) >= target_employees[("1","Tech")], "Target Level 1 Tech")
+model += (lpSum(existing_employees[("A6", "Tech")] + existing_employees[("ExC", "Tech")]  + hired[("A6","Tech")] + trained[("A6","Ana","Tech")] + promoted[("A5","A6","Tech")] + bought_contractor["ExC","Tech"] - trained[("A6","Tech","Ana")] - promoted[("A6","Man","Tech")]) >= target_employees[("2","Tech")], "Target Level 2 Tech")
+model += (lpSum(existing_employees[("Man", "Tech")] + hired[("Man","Tech")] + trained[("Man","Ana","Tech")] + promoted[("A6","Man","Tech")] - trained[("Man","Tech","Ana")]) >= target_employees[("3","Tech")], "Target Level 3 Tech")
 # CONSTRAINT: Force the number of 'promotions' of A5 to A5 to be 0 - this is to ensure the dictionaries function properly
 model += (promoted[("A5","A5","Ana")] == 0)
 model += (promoted[("A5","A5","Tech")] == 0)
 # CONSTRAINTS: Cannot train and promote more employees than there originally exists
-model += trained[("A5","Tech","Ana")] + promoted[("A5","A6","Tech")] <= existing_employees[("A5", "Tech")]
-model += trained[("A5","Ana","Tech")] + promoted[("A5","A6","Ana")] <= existing_employees[("A5", "Ana")]
-model += trained[("A6","Tech","Ana")] + promoted[("A6","Man","Ana")] <= existing_employees[("A6", "Tech")]
-model += trained[("A6","Ana","Tech")] + promoted[("A6","Man","Tech")] <= existing_employees[("A6", "Ana")]
-model +=  trained[("Man","Tech","Ana")] <= existing_employees[("Man", "Tech")] 
-model +=  trained[("Man","Ana","Tech")] <= existing_employees[("Man", "Ana")]
+model +=  (lpSum(trained[("A5","Tech","Ana")] + promoted[("A5","A6","Tech")]  ) <= existing_employees[("A5", "Tech")])
+model +=  (lpSum(trained[("A5","Ana","Tech")] + promoted[("A5","A6","Ana")]   ) <= existing_employees[("A5", "Ana")])
+model +=  (lpSum(trained[("A6","Tech","Ana")] + promoted[("A6","Man","Ana")]  ) <= existing_employees[("A6", "Tech")])
+model +=  (lpSum(trained[("A6","Ana","Tech")] + promoted[("A6","Man","Tech")] ) <= existing_employees[("A6", "Ana")])
+model +=  (lpSum(trained[("Man","Tech","Ana")]                                ) <= existing_employees[("Man", "Tech")] )
+model +=  (lpSum(trained[("Man","Ana","Tech")]                                ) <= existing_employees[("Man", "Ana")])
 
 
 ## Solve the model and print outputs
